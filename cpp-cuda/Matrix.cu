@@ -98,6 +98,9 @@ __global__ void matRELUKernel(const double* a, double* res, int rows, int cols) 
 }
 
 MatrixPtr matAdd(const MatrixPtr& a, const MatrixPtr& b){
+    if (!(a->cols == b->cols && a->rows == b->rows)) {
+        throw std::invalid_argument("Matrices are incompatible. ");
+    }
 
     auto result = std::make_shared<Matrix>(a->rows, a->cols);
 
@@ -105,7 +108,6 @@ MatrixPtr matAdd(const MatrixPtr& a, const MatrixPtr& b){
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
     matAddKernel<<<gridSize,blockSize>>> (a->data, b->data, result->data, a->rows, a->cols);
-    cudaDeviceSynchronize();
     return result;
 }
 
@@ -125,7 +127,6 @@ MatrixPtr matMul(const MatrixPtr& a, const MatrixPtr& b) {
 
 
     matMulKernel<<< gridSize, blockSize>>> (a->data, b->data, result->data, a->rows, b->cols, a->cols);
-    cudaDeviceSynchronize();
     return result;
 }
 
@@ -136,7 +137,6 @@ MatrixPtr operator*(const MatrixPtr &a, double b) {
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
     scalMatMulKernel<<< gridSize, blockSize>>> (a->data, b, result->data, a->rows, a->cols);
-    cudaDeviceSynchronize();
     return result;
 }
 
@@ -154,7 +154,6 @@ MatrixPtr matMulElementWise(const MatrixPtr &a, const MatrixPtr &b) {
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
     matMulElementWiseKernel<<< gridSize, blockSize>>> (a->data, b->data, result->data, a->rows, a->cols);
-    cudaDeviceSynchronize();
     return result;
 
 }
@@ -166,7 +165,6 @@ MatrixPtr matExp(const MatrixPtr &a) {
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
     matExpKernel<<<gridSize, blockSize>>> (a->data, result->data, a->rows, a->cols);
-    cudaDeviceSynchronize();
     return result;
 }
 
@@ -177,7 +175,6 @@ MatrixPtr matLog(const MatrixPtr &a) {
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
     matLogKernel<<<gridSize, blockSize>>> (a->data, result->data, a->rows, a->cols);
-    cudaDeviceSynchronize();
     return result;
 }
 
@@ -188,7 +185,6 @@ MatrixPtr matPow(const MatrixPtr &a, double pow) {
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
     matPowKernel<<<gridSize, blockSize>>> (a->data, result->data, pow, a->rows, a->cols);
-    cudaDeviceSynchronize();
     return result;
 }
 
@@ -199,7 +195,6 @@ MatrixPtr matRELU(const MatrixPtr &a) {
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
     matRELUKernel<<<gridSize, blockSize>>> (a->data, result->data, a->rows, a->cols);
-    cudaDeviceSynchronize();
     return result;
 }
 
