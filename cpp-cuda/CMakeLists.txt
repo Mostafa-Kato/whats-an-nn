@@ -6,7 +6,6 @@ set(CMAKE_CUDA_ARCHITECTURES 86)
 
 add_executable(cpp_cuda
         main.cu
-        main.cu
         Matrix.cu
         Matrix.cuh
 )
