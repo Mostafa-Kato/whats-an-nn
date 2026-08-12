@@ -8,4 +8,5 @@ add_executable(cpp_cuda
         main.cu
         Matrix.cu
         Matrix.cuh
+        cudaErrorCheck.cuh
 )

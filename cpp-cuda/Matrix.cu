@@ -17,13 +17,13 @@ dim3 calcGridSize2D(const dim3& blockSize, int rows, int cols) {
 
 Matrix::Matrix(int rows, int cols, const vector<double>& data_vector) : rows(rows), cols(cols), data(nullptr) {
     int bytes = rows*cols*sizeof(double);
-    cudaMalloc(&data, bytes);
-    cudaMemcpy(data, data_vector.data(), bytes, cudaMemcpyHostToDevice);
+    gpuErrchk(cudaMalloc(&data, bytes));
+    gpuErrchk(cudaMemcpy(data, data_vector.data(), bytes, cudaMemcpyHostToDevice));
 }
 
 Matrix::Matrix(int rows, int cols) : rows(rows), cols(cols), data(nullptr) {
     int bytes = rows*cols*sizeof(double);
-    cudaMalloc(&data, bytes);
+    gpuErrchk(cudaMalloc(&data, bytes));
 }
 
 Matrix::~Matrix() {
@@ -108,6 +108,8 @@ MatrixPtr matAdd(const MatrixPtr& a, const MatrixPtr& b){
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
     matAddKernel<<<gridSize,blockSize>>> (a->data, b->data, result->data, a->rows, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+
     return result;
 }
 
@@ -127,6 +129,8 @@ MatrixPtr matMul(const MatrixPtr& a, const MatrixPtr& b) {
 
 
     matMulKernel<<< gridSize, blockSize>>> (a->data, b->data, result->data, a->rows, b->cols, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+
     return result;
 }
 
@@ -137,6 +141,8 @@ MatrixPtr operator*(const MatrixPtr &a, double b) {
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
     scalMatMulKernel<<< gridSize, blockSize>>> (a->data, b, result->data, a->rows, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+
     return result;
 }
 
@@ -154,6 +160,8 @@ MatrixPtr matMulElementWise(const MatrixPtr &a, const MatrixPtr &b) {
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
     matMulElementWiseKernel<<< gridSize, blockSize>>> (a->data, b->data, result->data, a->rows, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+
     return result;
 
 }
@@ -165,6 +173,8 @@ MatrixPtr matExp(const MatrixPtr &a) {
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
     matExpKernel<<<gridSize, blockSize>>> (a->data, result->data, a->rows, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+
     return result;
 }
 
@@ -175,16 +185,20 @@ MatrixPtr matLog(const MatrixPtr &a) {
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
     matLogKernel<<<gridSize, blockSize>>> (a->data, result->data, a->rows, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+
     return result;
 }
 
-MatrixPtr matPow(const MatrixPtr &a, double pow) {
+MatrixPtr matPow(const MatrixPtr &a, const double power) {
     auto result = std::make_shared<Matrix>(a->rows, a->cols);
 
     dim3 blockSize(16,16);
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
-    matPowKernel<<<gridSize, blockSize>>> (a->data, result->data, pow, a->rows, a->cols);
+    matPowKernel<<<gridSize, blockSize>>> (a->data, result->data, power, a->rows, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+
     return result;
 }
 
@@ -195,12 +209,14 @@ MatrixPtr matRELU(const MatrixPtr &a) {
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
     matRELUKernel<<<gridSize, blockSize>>> (a->data, result->data, a->rows, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+
     return result;
 }
 
 void printMatrix(const MatrixPtr &a) {
     auto b = vector<double>(a->rows*a->cols, 0);
-    cudaMemcpy(b.data(), a->data, sizeof(double)*a->rows*a->cols, cudaMemcpyDeviceToHost);
+    gpuErrchk(cudaMemcpy(b.data(), a->data, sizeof(double)*a->rows*a->cols, cudaMemcpyDeviceToHost));
 
     for (int i = 0; i < a->rows; i++) {
         for (int j = 0 ; j < a->cols; j++) {

@@ -6,6 +6,7 @@
 #define WHATS_AN_NN_MATRIX_CUH
 #include <vector>
 #include <memory>
+#include "cudaErrorCheck.cuh"
 
 using std::vector;
 using std::shared_ptr;
@@ -45,7 +46,7 @@ MatrixPtr operator*(double b, const MatrixPtr& a);
 MatrixPtr matMulElementWise(const MatrixPtr& a, const MatrixPtr& b);
 MatrixPtr matExp(const MatrixPtr& a);
 MatrixPtr matLog(const MatrixPtr& a);
-MatrixPtr matPow(const MatrixPtr& a, double pow);
+MatrixPtr matPow(const MatrixPtr& a, double power);
 MatrixPtr matRELU(const MatrixPtr& a);
 void printMatrix(const MatrixPtr& a);
 
