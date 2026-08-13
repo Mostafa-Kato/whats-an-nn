@@ -26,8 +26,17 @@ Matrix::Matrix(int rows, int cols) : rows(rows), cols(cols), data(nullptr) {
     gpuErrchk(cudaMalloc(&data, bytes));
 }
 
+Matrix::Matrix(int rows, int cols, double* data) : rows(rows), cols(cols), data(data) {
+    int bytes = rows*cols*sizeof(double);
+    gpuErrchk(cudaMalloc(&data, bytes));
+}
+
 Matrix::~Matrix() {
     cudaFree(data);
+}
+
+std::shared_ptr<Matrix> Matrix::transpose() {
+    return std::make_shared<Matrix>(this->cols, this->rows, this->data);
 }
 
 __global__ void matAddKernel(const double* a, const double* b, double* c, const int rows, const int cols) {
@@ -94,6 +103,14 @@ __global__ void matRELUKernel(const double* a, double* res, int rows, int cols) 
     int j = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < rows && j < cols) {
         res[i*cols + j] = fmax(0.0, a[i*cols + j]);
+    }
+}
+
+__global__ void RELUGradKernel(double* data, double* res, int rows, int cols) {
+    int i = blockDim.y * blockIdx.y + threadIdx.y;
+    int j = blockDim.x * blockIdx.x + threadIdx.x;
+    if (i < rows && j < cols) {
+        data[i*cols + j] = (data[i*cols + j] > 0.0) ? 1.0 : 0.0;
     }
 }
 
@@ -214,6 +231,17 @@ MatrixPtr matRELU(const MatrixPtr &a) {
     return result;
 }
 
+MatrixPtr matRELUGrad(const MatrixPtr &a) {
+    auto result = std::make_shared<Matrix>(a->rows, a->cols);
+    dim3 blockSize(16,16);
+    dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
+
+    RELUGradKernel<<<gridSize, blockSize>>> (a->data, result->data, a->rows, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+
+    return result;
+}
+
 void printMatrix(const MatrixPtr &a) {
     auto b = vector<double>(a->rows*a->cols, 0);
     gpuErrchk(cudaMemcpy(b.data(), a->data, sizeof(double)*a->rows*a->cols, cudaMemcpyDeviceToHost));
@@ -225,3 +253,4 @@ void printMatrix(const MatrixPtr &a) {
         std::cout << "\n";
     }
 }
+

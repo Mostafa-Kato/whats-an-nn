@@ -9,4 +9,6 @@ add_executable(cpp_cuda
         Matrix.cu
         Matrix.cuh
         cudaErrorCheck.cuh
+        Tensor.cu
+        Tensor.cuh
 )
