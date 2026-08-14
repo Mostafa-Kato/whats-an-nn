@@ -128,6 +128,7 @@ void Tensor::backward() {
        this->data->cols,
        vector<double>(this->data->rows * this->data->cols, 1.0)
        );
+   
    for (auto it= order.rbegin(); it != order.rend(); ++it) {
       if ((*it)->back) {
          (*it)->back();

@@ -32,7 +32,7 @@ TensorPtr softmax_loss(const TensorPtr& predictions, const vector<double>& y_one
 
     auto loss_tensor = std::make_shared<Tensor>(
         std::make_shared<Matrix>(vector<double>{loss_val}, 1, 1),
-        vector<TensorPtr>{predictions},
+        vector  <TensorPtr>{predictions},
         "softmax_crossentropy"
     );
 
@@ -82,9 +82,6 @@ int main(int argc, char* argv[]) {
     }
 
     auto t1 = std::chrono::high_resolution_clock::now();
-
-
-
 
     int correct = 0;
 

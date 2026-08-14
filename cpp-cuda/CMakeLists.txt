@@ -11,4 +11,10 @@ add_executable(cpp_cuda
         cudaErrorCheck.cuh
         Tensor.cu
         Tensor.cuh
+        mnist-loader.h
+        mnist-loader.cpp
+        Layer.cu
+        Layer.cuh
+        Network.cu
+        Network.cuh
 )

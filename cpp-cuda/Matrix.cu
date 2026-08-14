@@ -17,26 +17,24 @@ dim3 calcGridSize2D(const dim3& blockSize, int rows, int cols) {
 
 Matrix::Matrix(int rows, int cols, const vector<double>& data_vector) : rows(rows), cols(cols), data(nullptr) {
     int bytes = rows*cols*sizeof(double);
-    gpuErrchk(cudaMalloc(&data, bytes));
-    gpuErrchk(cudaMemcpy(data, data_vector.data(), bytes, cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMalloc(&this->data, bytes));
+    gpuErrchk(cudaMemcpy(this->data, data_vector.data(), bytes, cudaMemcpyHostToDevice));
 }
 
 Matrix::Matrix(int rows, int cols) : rows(rows), cols(cols), data(nullptr) {
     int bytes = rows*cols*sizeof(double);
-    gpuErrchk(cudaMalloc(&data, bytes));
+    gpuErrchk(cudaMalloc(&this->data, bytes));
+    gpuErrchk(cudaMemset(this->data, 0, bytes));
 }
 
-Matrix::Matrix(int rows, int cols, double* data) : rows(rows), cols(cols), data(data) {
+Matrix::Matrix(int rows, int cols, double* in_data) : rows(rows), cols(cols), data(nullptr) {
     int bytes = rows*cols*sizeof(double);
-    gpuErrchk(cudaMalloc(&data, bytes));
+    gpuErrchk(cudaMalloc(&this->data, bytes));
+    gpuErrchk(cudaMemcpy(this->data, in_data, bytes, cudaMemcpyHostToDevice));
 }
 
 Matrix::~Matrix() {
     cudaFree(data);
-}
-
-std::shared_ptr<Matrix> Matrix::transpose() {
-    return std::make_shared<Matrix>(this->cols, this->rows, this->data);
 }
 
 __global__ void matAddKernel(const double* a, const double* b, double* c, const int rows, const int cols) {
@@ -63,6 +61,14 @@ __global__ void scalMatMulKernel(const double* a, const double b, double* c, con
     int j = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < rows && j < cols) {
         c[i*cols + j] = a[i*cols + j] * b;
+    }
+}
+
+__global__ void scalMatAddKernel(const double* a, const double b, double* c, const int rows, const int cols) {
+    int i = blockDim.y * blockIdx.y + threadIdx.y;
+    int j = blockDim.x * blockIdx.x + threadIdx.x;
+    if (i < rows && j < cols) {
+        c[i*cols + j] = a[i*cols + j] + b;
     }
 }
 
@@ -110,8 +116,75 @@ __global__ void RELUGradKernel(double* data, double* res, int rows, int cols) {
     int i = blockDim.y * blockIdx.y + threadIdx.y;
     int j = blockDim.x * blockIdx.x + threadIdx.x;
     if (i < rows && j < cols) {
-        data[i*cols + j] = (data[i*cols + j] > 0.0) ? 1.0 : 0.0;
+        res[i*cols + j] = (data[i*cols + j] > 0.0) ? 1.0 : 0.0;
     }
+}
+
+__global__ void matSumKernel(double* data, double* res, int rows, int cols) {
+    int i = blockDim.y * blockIdx.y + threadIdx.y;
+    int j = blockDim.x * blockIdx.x + threadIdx.x;
+    int localIndex = threadIdx.y * blockDim.x + threadIdx.x;
+    __shared__ double s[256];
+    if (i<rows && j< cols) {
+        s[localIndex] = data[i*cols + j];
+    }
+    else s[localIndex] = 0.0;
+    __syncthreads();
+
+    for (int stride = (blockDim.x * blockDim.y) / 2; stride > 0; stride = stride/2) {
+        if (localIndex < stride) {
+            s[localIndex] += s[localIndex + stride];
+        }
+        __syncthreads();
+    }
+    if (localIndex == 0) {
+        atomicAdd(res, s[0]);
+    }
+}
+
+__global__ void matMaxKernel(double* data, double* res, int rows, int cols) {
+   __shared__ double s[256];
+    int i = blockDim.y * blockIdx.y + threadIdx.y;
+    int j = blockDim.x * blockIdx.x + threadIdx.x;
+    int localIndex = threadIdx.y * blockDim.x + threadIdx.x;
+
+    if (i < rows && j < cols) {
+        s[localIndex] = data[i*cols + j];
+    }
+    else s[localIndex] = -INFINITY;
+    __syncthreads();
+
+    for (int stride = (blockDim.x * blockDim.y) / 2; stride > 0; stride = stride/2) {
+        if (localIndex < stride) {
+            s[localIndex] = (s[localIndex + stride] > s[localIndex]) ? s[localIndex + stride] : s[localIndex];
+        }
+        __syncthreads();
+    }
+    if (localIndex == 0) {
+        int blockID = blockIdx.y * gridDim.x + blockIdx.x;
+        res[blockID] = s[0];
+    }
+
+}
+
+__global__ void matTransposeKernel(const double* og, double* transposed, int rows, int cols) {
+    int i = blockDim.y * blockIdx.y + threadIdx.y;
+    int j = blockDim.x * blockIdx.x + threadIdx.x;
+    if (i < rows && j < cols) {
+        transposed[j * rows + i] = og[i * cols + j];
+    }
+}
+
+std::shared_ptr<Matrix> Matrix::transpose() {
+    auto result = std::make_shared<Matrix>(this->cols, this->rows);
+
+    dim3 blockSize(16, 16);
+    dim3 gridSize = calcGridSize2D(blockSize, this->rows, this->cols);
+
+    matTransposeKernel<<<gridSize, blockSize>>>(this->data, result->data, this->rows, this->cols);
+    gpuErrchk(cudaPeekAtLastError());
+
+    return result;
 }
 
 MatrixPtr matAdd(const MatrixPtr& a, const MatrixPtr& b){
@@ -157,7 +230,7 @@ MatrixPtr operator*(const MatrixPtr &a, double b) {
     dim3 blockSize(16,16);
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
-    scalMatMulKernel<<< gridSize, blockSize>>> (a->data, b, result->data, a->rows, a->cols);
+    scalMatMulKernel<<<gridSize, blockSize>>> (a->data, b, result->data, a->rows, a->cols);
     gpuErrchk(cudaPeekAtLastError());
 
     return result;
@@ -165,6 +238,25 @@ MatrixPtr operator*(const MatrixPtr &a, double b) {
 
 MatrixPtr operator*(const double b, const MatrixPtr &a) {
     return a*b;
+}
+
+MatrixPtr operator/(const MatrixPtr& a, const double b) {
+    return a * pow(b,-1.0);
+}
+
+MatrixPtr scalMatAdd(const MatrixPtr& a, const double b) {
+    auto result = std::make_shared<Matrix>(a->rows, a->cols);
+    dim3 blockSize(16,16);
+    dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
+
+    scalMatAddKernel<<< gridSize, blockSize>>> (a->data, b, result->data, a->rows, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+
+    return result;
+}
+
+MatrixPtr scalMatAdd(const double b, const MatrixPtr& a) {
+    return scalMatAdd(a, b);
 }
 
 MatrixPtr matMulElementWise(const MatrixPtr &a, const MatrixPtr &b) {
@@ -240,6 +332,47 @@ MatrixPtr matRELUGrad(const MatrixPtr &a) {
     gpuErrchk(cudaPeekAtLastError());
 
     return result;
+}
+
+double matSum(const MatrixPtr &a) {
+    double hres;
+    double* dres;
+    gpuErrchk(cudaMalloc(&dres, sizeof(double)));
+
+    gpuErrchk(cudaMemset(dres, 0.0, sizeof(double)));
+
+    dim3 blockSize(16, 16);
+    dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
+
+    matSumKernel<<<gridSize, blockSize>>> (a->data, dres, a->rows, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+    gpuErrchk(cudaMemcpy(&hres, dres, sizeof(double), cudaMemcpyDeviceToHost));
+    cudaFree(dres);
+
+
+    return hres;
+}
+
+double matMaxValue(const MatrixPtr& a) {
+    dim3 blockSize(16, 16);
+    dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
+    int numBlocks = gridSize.x * gridSize.y;
+
+    vector<double> hmax = vector<double>(numBlocks);
+    double* dmax;
+    double max = -INFINITY;
+
+    gpuErrchk(cudaMalloc(&dmax, numBlocks*sizeof(double)));
+    matMaxKernel<<<gridSize, blockSize>>> (a->data, dmax, a->rows, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+    gpuErrchk(cudaMemcpy(hmax.data(), dmax, sizeof(double) * numBlocks, cudaMemcpyDeviceToHost));
+    cudaFree(dmax);
+
+    for (int i = 0; i < numBlocks; i++) {
+        max = (max < hmax[i]) ? hmax[i] : max;
+    }
+
+    return max;
 }
 
 void printMatrix(const MatrixPtr &a) {
