@@ -11,6 +11,9 @@
 using std::vector;
 using std::shared_ptr;
 
+enum AXIS {ROWS, COLS};
+
+
 class Matrix {
 public:
     int rows, cols;
@@ -34,22 +37,22 @@ using MatrixPtr = shared_ptr<Matrix>;
 
 dim3 calcGridSize2D(const dim3& blockSize, int rows, int cols);
 MatrixPtr matAdd(const MatrixPtr& a, const MatrixPtr& b);
+MatrixPtr scalMatAdd(const MatrixPtr& a, double b);
+MatrixPtr scalMatAdd(double b, const MatrixPtr& a);
+MatrixPtr matAddBias(const MatrixPtr& a, const MatrixPtr& b);
 MatrixPtr matSub(const MatrixPtr& a, const MatrixPtr& b);
 MatrixPtr matMul(const MatrixPtr& a, const MatrixPtr& b);
+MatrixPtr matMulElementWise(const MatrixPtr& a, const MatrixPtr& b);
 MatrixPtr operator*(const MatrixPtr& a, double b);
 MatrixPtr operator*(double b, const MatrixPtr& a);
 MatrixPtr operator/(const MatrixPtr& a, double b);
-MatrixPtr scalMatAdd(const MatrixPtr& a, double b);
-MatrixPtr scalMatAdd(double b, const MatrixPtr& a);
-MatrixPtr matMulElementWise(const MatrixPtr& a, const MatrixPtr& b);
 MatrixPtr matExp(const MatrixPtr& a);
 MatrixPtr matLog(const MatrixPtr& a);
 MatrixPtr matPow(const MatrixPtr& a, double power);
 MatrixPtr matRELU(const MatrixPtr& a);
 MatrixPtr matRELUGrad(const MatrixPtr& a);
-double matSum(const MatrixPtr& a);
-double matMaxValue(const MatrixPtr& a);
-
+MatrixPtr matSumAxis(const MatrixPtr& a, AXIS axis);
+MatrixPtr matMaxAxis(const MatrixPtr& a, AXIS axis);
 void printMatrix(const MatrixPtr& a);
 
 

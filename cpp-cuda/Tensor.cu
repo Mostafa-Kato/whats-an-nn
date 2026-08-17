@@ -64,6 +64,18 @@ TensorPtr operator-(const TensorPtr &a, const TensorPtr &b) {
    return result;
 }
 
+TensorPtr tenAddBias(const TensorPtr &a, const TensorPtr &b) {
+   auto res_data = matAddBias(a->data, b->data);
+   auto result = std::make_shared<Tensor>(res_data, vector<TensorPtr>{a,b});
+
+   Tensor* res = result.get();
+   result->back = [a, b, res]() {
+      a->grad = matAdd(res->grad, a->grad);
+      b->grad = matAdd(matSumRows(res->grad), b->grad);
+   };
+   return result;
+}
+
 TensorPtr tenPow(const TensorPtr &a, double power) {
    auto res_data = matPow(a->data, power);
    auto result = std::make_shared<Tensor>(res_data, vector<TensorPtr>{a});

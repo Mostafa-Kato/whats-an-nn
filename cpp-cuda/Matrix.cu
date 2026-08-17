@@ -45,6 +45,14 @@ __global__ void matAddKernel(const double* a, const double* b, double* c, const 
     }
 }
 
+__global__ void matAddBiasKernel(const double* a, const double* bias, double* c, const int rows, const int cols) {
+    int i = blockDim.y * blockIdx.y + threadIdx.y;
+    int j = blockDim.x * blockIdx.x + threadIdx.x;
+    if (i < rows && j < cols) {
+        c[i*cols + j] = a[i*cols + j] + bias[i];
+    }
+}
+
 __global__ void matMulKernel(const double* a, const double* b, double* c, const int rows, const int cols, const int inner) {
     int i = blockDim.y * blockIdx.y + threadIdx.y;
     int j = blockDim.x * blockIdx.x + threadIdx.x;
@@ -120,51 +128,33 @@ __global__ void RELUGradKernel(double* data, double* res, int rows, int cols) {
     }
 }
 
-__global__ void matSumKernel(double* data, double* res, int rows, int cols) {
+__global__ void matSumRowsKernel(double* data, double* res, int rows, int cols) {
     int i = blockDim.y * blockIdx.y + threadIdx.y;
     int j = blockDim.x * blockIdx.x + threadIdx.x;
-    int localIndex = threadIdx.y * blockDim.x + threadIdx.x;
+    int localIndex = ;
     __shared__ double s[256];
-    if (i<rows && j< cols) {
-        s[localIndex] = data[i*cols + j];
-    }
-    else s[localIndex] = 0.0;
-    __syncthreads();
 
-    for (int stride = (blockDim.x * blockDim.y) / 2; stride > 0; stride = stride/2) {
-        if (localIndex < stride) {
-            s[localIndex] += s[localIndex + stride];
-        }
-        __syncthreads();
-    }
-    if (localIndex == 0) {
-        atomicAdd(res, s[0]);
-    }
 }
 
-__global__ void matMaxKernel(double* data, double* res, int rows, int cols) {
-   __shared__ double s[256];
+__global__ void matSumColsKernel(double* data, double* res, int rows, int cols) {
     int i = blockDim.y * blockIdx.y + threadIdx.y;
     int j = blockDim.x * blockIdx.x + threadIdx.x;
-    int localIndex = threadIdx.y * blockDim.x + threadIdx.x;
+    int localIndex = ;
+    __shared__ double s[256];
+}
 
-    if (i < rows && j < cols) {
-        s[localIndex] = data[i*cols + j];
-    }
-    else s[localIndex] = -INFINITY;
-    __syncthreads();
+__global__ void matMaxRowsKernel(double* data, double* res, int rows, int cols) {
+    int i = blockDim.y * blockIdx.y + threadIdx.y;
+    int j = blockDim.x * blockIdx.x + threadIdx.x;
+    int localIndex = ;
+    __shared__ double s[256];
+}
 
-    for (int stride = (blockDim.x * blockDim.y) / 2; stride > 0; stride = stride/2) {
-        if (localIndex < stride) {
-            s[localIndex] = (s[localIndex + stride] > s[localIndex]) ? s[localIndex + stride] : s[localIndex];
-        }
-        __syncthreads();
-    }
-    if (localIndex == 0) {
-        int blockID = blockIdx.y * gridDim.x + blockIdx.x;
-        res[blockID] = s[0];
-    }
-
+__global__ void matMaxColsKernel(double* data, double* res, int rows, int cols) {
+    int i = blockDim.y * blockIdx.y + threadIdx.y;
+    int j = blockDim.x * blockIdx.x + threadIdx.x;
+    int localIndex = ;
+    __shared__ double s[256];
 }
 
 __global__ void matTransposeKernel(const double* og, double* transposed, int rows, int cols) {
@@ -198,6 +188,21 @@ MatrixPtr matAdd(const MatrixPtr& a, const MatrixPtr& b){
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
 
     matAddKernel<<<gridSize,blockSize>>> (a->data, b->data, result->data, a->rows, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+
+    return result;
+}
+
+MatrixPtr matAddBias(const MatrixPtr& a, const MatrixPtr& bias) {
+    if (bias->cols != 1 || bias->rows != a->rows){
+        throw std::invalid_argument("Bias should have same rows as a and 1 col");
+    }
+    auto result = std::make_shared<Matrix>(a->rows, a->cols);
+    dim3 blockSize(16,16);
+    dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
+
+
+    matAddBiasKernel<<<gridSize, blockSize>>> (a->data, bias->data, result->data, a->rows, a->cols);
     gpuErrchk(cudaPeekAtLastError());
 
     return result;
@@ -334,45 +339,38 @@ MatrixPtr matRELUGrad(const MatrixPtr &a) {
     return result;
 }
 
-double matSum(const MatrixPtr &a) {
-    double hres;
-    double* dres;
-    gpuErrchk(cudaMalloc(&dres, sizeof(double)));
-
-    gpuErrchk(cudaMemset(dres, 0.0, sizeof(double)));
-
+MatrixPtr matSumAxis(const MatrixPtr &a, AXIS axis) {
     dim3 blockSize(16, 16);
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
-
-    matSumKernel<<<gridSize, blockSize>>> (a->data, dres, a->rows, a->cols);
-    gpuErrchk(cudaPeekAtLastError());
-    gpuErrchk(cudaMemcpy(&hres, dres, sizeof(double), cudaMemcpyDeviceToHost));
-    cudaFree(dres);
-
-
-    return hres;
+    if (axis == ROWS) {
+        auto result = std::make_shared<Matrix>(1, a->cols);
+        matSumRowsKernel<<<gridSize, blockSize>>>(a->data, result->data, a->rows, a->cols);
+        gpuErrchk(cudaPeekAtLastError());
+        return result;
+    }
+    else {
+        auto result = std::make_shared<Matrix>(a->rows, 1);
+        matSumColsKernel<<<gridSize, blockSize>>>(a->data, result->data, a->rows, a->cols);
+        gpuErrchk(cudaPeekAtLastError());
+        return result;
+    }
 }
 
-double matMaxValue(const MatrixPtr& a) {
+MatrixPtr matMaxAxis(const MatrixPtr& a, AXIS axis) {
     dim3 blockSize(16, 16);
     dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
-    int numBlocks = gridSize.x * gridSize.y;
-
-    vector<double> hmax = vector<double>(numBlocks);
-    double* dmax;
-    double max = -INFINITY;
-
-    gpuErrchk(cudaMalloc(&dmax, numBlocks*sizeof(double)));
-    matMaxKernel<<<gridSize, blockSize>>> (a->data, dmax, a->rows, a->cols);
-    gpuErrchk(cudaPeekAtLastError());
-    gpuErrchk(cudaMemcpy(hmax.data(), dmax, sizeof(double) * numBlocks, cudaMemcpyDeviceToHost));
-    cudaFree(dmax);
-
-    for (int i = 0; i < numBlocks; i++) {
-        max = (max < hmax[i]) ? hmax[i] : max;
+    if (axis == ROWS) {
+        auto result = std::make_shared<Matrix>(1, a->cols);
+        matMaxRowsKernel<<<gridSize, blockSize>>>(a->data, result->data, a->rows, a->cols);
+        gpuErrchk(cudaPeekAtLastError());
+        return result;
     }
-
-    return max;
+    else {
+        auto result = std::make_shared<Matrix>(a->rows, 1);
+        matMaxColsKernel<<<gridSize, blockSize>>>(a->data, result->data, a->rows, a->cols);
+        gpuErrchk(cudaPeekAtLastError());
+        return result;
+    }
 }
 
 void printMatrix(const MatrixPtr &a) {

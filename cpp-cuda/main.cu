@@ -8,10 +8,16 @@
 #include "Network.cuh"
 #include "mnist-loader.h"
 
-TensorPtr toTensor(const vector<double>& inputs) {
-    return std::make_shared<Tensor>(
-        std::make_shared<Matrix>(static_cast<int>(inputs.size()), 1, inputs)
-    );
+//super inefficient but i need something just to see if understanding works,
+//should just rework the actual loader in the future
+vector<double> loadBatch(const vector<vector<double>>& input, const int inputSize, const int batchSize, const int iteration) {
+    vector<double> batch = vector<double>(inputSize * batchSize);
+    for (int i = 0; i < batchSize; i++) {
+        for (int j = 0; j < inputSize; j++) {
+           batch[i*inputSize + j] = input[i + iteration*batchSize][j];
+        }
+    }
+    return batch;
 }
 
 TensorPtr softmaxLoss(const TensorPtr& predictions, const vector<double>& y_onehot) {
@@ -20,7 +26,7 @@ TensorPtr softmaxLoss(const TensorPtr& predictions, const vector<double>& y_oneh
     // find the maximum and subtract it from each entry
     double max = matMaxValue(data);
     auto exps = matExp(scalMatAdd(data, max*-1));
-    double sum = matSum(exps);
+    double sum = matSumAxis(exps);
 
     //Compute softmax prob
     auto probs = exps/sum;
@@ -55,71 +61,32 @@ TensorPtr softmaxLoss(const TensorPtr& predictions, const vector<double>& y_oneh
 }
 
 int main(int argc, char* argv[]) {
-    const auto training_images = loadImages("../../training-data/train-images.idx3-ubyte");
-    const auto training_labels = loadLabels("../../training-data/train-labels.idx1-ubyte");
-    const auto x_test = loadImages("../../training-data/t10k-images.idx3-ubyte");
-    const auto y_test = loadLabels("../../training-data/t10k-labels.idx1-ubyte");
+    const auto trainingImages = loadImages("../../training-data/train-images.idx3-ubyte");
+    const auto trainingLabels = loadLabels("../../training-data/train-labels.idx1-ubyte");
+    const auto xTest = loadImages("../../training-data/t10k-images.idx3-ubyte");
+    const auto yTest = loadLabels("../../training-data/t10k-labels.idx1-ubyte");
 
-    const auto net = Network({784, 64, 64, 10});
-    const double learning_rate = 0.01;
+    auto numImages = trainingImages.size();
+    const int batchSize = (argc  > 1) ? std::atoi(argv[1]) : 32;
+    const int epochSize = 5;
+    const int numIterations = numImages / batchSize;
+
+    const auto net = Network({784 * batchSize, 64, 64, 10});
+    const double learningRate = 0.01;
     const auto t0 = std::chrono::high_resolution_clock::now();
 
-    int batch_size = (argc  > 1) ? std::atoi(argv[1]) : 1000;
-
-    for (int i = 0; i < 1; i++) {
-        for (int j = 0; j < batch_size; j++) {
-            net.zero_grad();
-
-            // Using .at() instead of [] forces C++ to check bounds and scream if it fails
-            auto pixels = toTensor(training_images.at(j));
-            auto prediction = net(pixels);
-            auto loss_value = softmaxLoss(prediction, training_labels.at(j));
-            double lossDouble;
-            cudaMemcpy(&lossDouble, loss_value->data->data, sizeof(double), cudaMemcpyDeviceToHost);
-            loss_value->backward();
-            net.update_parameter(learning_rate);
-            if (j % 500 == 0) {
-                std::cout << "epoch " << i << ", image " << j << ", loss = " << lossDouble << std::endl;
-            }
-        }
+    for (int i = 0; i < epochSize; i++) {
+       for (int j = 0; j < numIterations; j++) {
+           vector<double> batch = loadBatch(trainingImages, 784, batchSize, j);
+           vector<double> batchLabels = loadBatch(trainingLabels, 10, batchSize, j);
+           MatrixPtr batchMat = std::make_shared<Matrix>(batchSize, 784, batch);
+           TensorPtr batchTsr = std::make_shared<Tensor>(batchMat);
+           auto prediction = net(batchTsr);
+           auto lossValue = softmaxLoss(prediction, batchLabels);
+           lossValue->backward();
+       }
     }
 
-    auto t1 = std::chrono::high_resolution_clock::now();
 
-    int correct = 0;
-
-    for (size_t j = 0; j < x_test.size(); j++) {
-        if (j % 500 == 0) {
-            std::cout << "testing image " << j << "/" << x_test.size() << std::endl;
-        }
-        auto pixels = toTensor(x_test.at(j));
-        auto prediction_raw = net(pixels);
-
-        std::vector<double> h_pred(10);
-        cudaMemcpy(h_pred.data(), prediction_raw->data->data, 10 * sizeof(double), cudaMemcpyDeviceToHost);
-
-        int predicted = std::max_element(h_pred.begin(), h_pred.end()) - h_pred.begin();
-
-        int actual = std::max_element(y_test.at(j).begin(), y_test.at(j).end()) - y_test.at(j).begin();
-
-        if (predicted == actual) {
-            correct++;
-        }
-    }
-    auto t2 = std::chrono::high_resolution_clock::now();
-    std::ofstream outFile("results_tensor.csv", std::ios::app);
-
-    if (outFile.is_open()) {
-        // (TrainingSize, TrainTime, TestTime, Accuracy)
-        outFile << batch_size << ","
-                <<  std::chrono::duration<double>(t1 - t0).count() << ","
-                << std::chrono::duration<double>(t2 - t1).count() << ","
-                << (100.0 * correct / x_test.size()) << std::endl;
-
-        outFile.close();
-    }
-    std::cout << "Training time: " << std::chrono::duration<double>(t1 - t0).count() << "s" << std::endl;
-    std::cout << "Test accuracy: " << (100.0 * correct / x_test.size()) << "%" << std::endl;
-    std::cout << "Testing time: " << std::chrono::duration<double>(t2 - t1).count() << "s" << std::endl;
     return 0;
 }

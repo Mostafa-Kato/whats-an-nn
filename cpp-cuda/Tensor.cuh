@@ -27,6 +27,7 @@ TensorPtr operator+(const TensorPtr& a, const TensorPtr& b);
 TensorPtr operator-(const TensorPtr& a, const TensorPtr& b);
 TensorPtr operator*(const TensorPtr& a, double b);
 TensorPtr operator*(double b, const TensorPtr& a);
+TensorPtr tenAddBias(const TensorPtr& a, const TensorPtr& b);
 TensorPtr tenPow(const TensorPtr& a, double power);
 TensorPtr tenExp(const TensorPtr& a);
 TensorPtr tenLog(const TensorPtr& a);
