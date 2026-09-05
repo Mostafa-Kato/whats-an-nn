@@ -49,7 +49,7 @@ RTX 4070 Laptop 8GB
 
 ### Speed Test Results
 #### CPU
-| # of Epochs | Training Time (s) |
+| # of Epochs | Total Time (s) |
 |---|---|
 | 1 | 28.84 |
 | 3 | 85.93 | 
@@ -57,7 +57,7 @@ RTX 4070 Laptop 8GB
 | 10 | 283.36 | 
 
 #### CUDA
-| # of Epochs | Training Time (s) |
+| # of Epochs | Total Time (s) |
 |---|---|
 | 1 | 3.32 | 
 | 3 | 7.04 |
