@@ -30,7 +30,7 @@ TensorPtr operator*(const TensorPtr& a, const TensorPtr& b) {
     MatrixPtr newData = a->data * b->data;
     auto result = std::make_shared<Tensor>(newData, vector<TensorPtr>{a,b}, "*");
     result->back = [a, b, result]() {
-        a->grad = a->grad + result->grad * b->data->transpose();  // (64,1) * (1,784) = (64,784) ✓
+        a->grad = a->grad + result->grad * b->data->transpose();
         b->grad = b->grad + a->data->transpose() * result->grad;
     };
     return result;

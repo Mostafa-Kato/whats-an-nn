@@ -32,7 +32,7 @@ TensorPtr softmax_loss(const TensorPtr& predictions, const vector<double>& y_one
 
     auto loss_tensor = std::make_shared<Tensor>(
         std::make_shared<Matrix>(vector<double>{loss_val}, 1, 1),
-        vector<TensorPtr>{predictions},
+        vector  <TensorPtr>{predictions},
         "softmax_crossentropy"
     );
 
@@ -65,11 +65,10 @@ int main(int argc, char* argv[]) {
 
     int batch_size = (argc  > 1) ? std::atoi(argv[1]) : 1000;
 
-    for (int i = 0; i < 1; i++) {
+    for (int i = 0; i < 10; i++) {
         for (int j = 0; j < batch_size; j++) {
             net.zero_grad();
 
-            // Using .at() instead of [] forces C++ to check bounds and scream if it fails
             auto pixels = toTensor(training_images.at(j));
             auto prediction = net(pixels);
             auto loss_value = softmax_loss(prediction, training_labels.at(j));
@@ -82,9 +81,6 @@ int main(int argc, char* argv[]) {
     }
 
     auto t1 = std::chrono::high_resolution_clock::now();
-
-
-
 
     int correct = 0;
 
@@ -116,7 +112,7 @@ int main(int argc, char* argv[]) {
     if (outFile.is_open()) {
         // (TrainingSize, TrainTime, TestTime, Accuracy)
         outFile << batch_size << ","
-                <<  std::chrono::duration<double>(t1 - t0).count() << ","
+                << std::chrono::duration<double>(t1 - t0).count() << ","
                 << std::chrono::duration<double>(t2 - t1).count() << ","
                 << (100.0 * correct / x_test.size()) << std::endl;
 

@@ -234,3 +234,18 @@ Makefile
 
 #Training Data
 training-data/
+
+# CUDA intermediate and binary files
+*.ptx
+*.cubin
+*.fatbin
+
+# NVIDIA Nsight Profiling data
+*.nsys-rep
+*.ncu-rep
+*.qdrep
+
+# Compiled static/dynamic libraries
+*.a
+*.dylib
+*.lib
