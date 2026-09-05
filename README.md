@@ -65,7 +65,7 @@ RTX 4070 Laptop 8GB
 | 10 | 18.52 | 
 | 100 | 171.86 | 
 
-![Speed Comparison](Images/CPU%20vs.%20GPU%Total%20Time.png)
+![Speed Comparison](Images/CPU%20vs.%20GPU%20Total%20Time.png)
 
 ### Accuracy Test Results
 #### CPU
