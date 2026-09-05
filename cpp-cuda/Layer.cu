@@ -25,9 +25,9 @@ Layer::Layer(const int num_inputs, const int num_neurons) {
 
 TensorPtr Layer::operator()(const TensorPtr &input_vector, bool last) const {
     if (!last) {
-        return tenRELU(this->weights * input_vector + biases);
+        return tenRELU(tenAddBias(this->weights * input_vector ,biases));
     }
-    return this->weights * input_vector + biases;
+    return tenAddBias(this->weights*input_vector, biases);
 }
 
 vector<TensorPtr> Layer::parameters() const {

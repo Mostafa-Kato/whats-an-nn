@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
 
     int batch_size = (argc  > 1) ? std::atoi(argv[1]) : 1000;
 
-    for (int i = 0; i < 1; i++) {
+    for (int i = 0; i < 10; i++) {
         for (int j = 0; j < batch_size; j++) {
             net.zero_grad();
 

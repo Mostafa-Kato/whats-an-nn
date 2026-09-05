@@ -53,6 +53,14 @@ __global__ void matAddBiasKernel(const double *a, const double *bias, double *c,
     }
 }
 
+__global__ void matAddColBroadcastKernel(const double* a, const double* rowVector, double* c, const int rows, const int cols) {
+    int i = blockDim.y * blockIdx.y + threadIdx.y;
+    int j = blockDim.x * blockIdx.x + threadIdx.x;
+    if (i < rows && j < cols) {
+        c[i * cols + j] = a[i * cols + j] + rowVector[j];
+    }
+}
+
 __global__ void matMulKernel(const double *a, const double *b, double *c, const int rows, const int cols,
                              const int inner) {
     int i = blockDim.y * blockIdx.y + threadIdx.y;
@@ -62,6 +70,14 @@ __global__ void matMulKernel(const double *a, const double *b, double *c, const 
         for (int x = 0; x < inner; x++) {
             c[i * cols + j] += a[i * inner + x] * b[x * cols + j];
         }
+    }
+}
+
+__global__ void matMulColBroadcastKernel(const double* a, const double* rowVector, double* c, const int rows, const int cols) {
+    int i = blockDim.y * blockIdx.y + threadIdx.y;
+    int j = blockDim.x * blockIdx.x + threadIdx.x;
+    if (i < rows && j < cols) {
+        c[i * cols + j] = a[i * cols + j] * rowVector[j];
     }
 }
 
@@ -251,6 +267,21 @@ MatrixPtr matAddBias(const MatrixPtr &a, const MatrixPtr &bias) {
     return result;
 }
 
+MatrixPtr matAddColBroadcast(const MatrixPtr& a, const MatrixPtr& rowVector) {
+    if (rowVector->cols != a->cols || rowVector->rows != 1) {
+        throw std::invalid_argument("Row vector should have same cols as a and 1 row");
+    }
+    auto result = std::make_shared<Matrix>(a->rows, a->cols);
+    dim3 blockSize(16, 16);
+    dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
+
+
+    matAddColBroadcastKernel<<<gridSize, blockSize>>>(a->data, rowVector->data, result->data, a->rows, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+
+    return result;
+}
+
 MatrixPtr matSub(const MatrixPtr &a, const MatrixPtr &b) {
     return matAdd(a, -1 * b);
 }
@@ -267,6 +298,21 @@ MatrixPtr matMul(const MatrixPtr &a, const MatrixPtr &b) {
 
 
     matMulKernel<<< gridSize, blockSize>>>(a->data, b->data, result->data, a->rows, b->cols, a->cols);
+    gpuErrchk(cudaPeekAtLastError());
+
+    return result;
+}
+
+MatrixPtr matMulColBroadcast(const MatrixPtr &a, const MatrixPtr& rowVector) {
+    if (rowVector->cols != a->cols || rowVector->rows != 1) {
+        throw std::invalid_argument("Row vector should have same cols as a and 1 row");
+    }
+    auto result = std::make_shared<Matrix>(a->rows, a->cols);
+    dim3 blockSize(16, 16);
+    dim3 gridSize = calcGridSize2D(blockSize, a->rows, a->cols);
+
+
+    matMulColBroadcastKernel<<<gridSize, blockSize>>>(a->data, rowVector->data, result->data, a->rows, a->cols);
     gpuErrchk(cudaPeekAtLastError());
 
     return result;

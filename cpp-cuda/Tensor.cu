@@ -71,7 +71,7 @@ TensorPtr tenAddBias(const TensorPtr &a, const TensorPtr &b) {
    Tensor* res = result.get();
    result->back = [a, b, res]() {
       a->grad = matAdd(res->grad, a->grad);
-      b->grad = matAdd(matSumRows(res->grad), b->grad);
+      b->grad = matAdd(matSumAxis(res->grad, ROWS), b->grad);
    };
    return result;
 }
