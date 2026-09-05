@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
 
     auto numImages = trainingImages.size();
     const int batchSize = (argc  > 1) ? std::atoi(argv[1]) : 32;
-    const int epochSize = 100;
+    const int epochSize = 10;
     const int numIterations = numImages / batchSize;
 
     const auto net = Network({784, 64, 64, 10});
